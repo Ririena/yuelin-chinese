@@ -1,13 +1,137 @@
-import Link from "next/link"
-import { ArrowLeft, Clock, FlameIcon as Fire, Award, BarChart2, BookOpen, AlertTriangle } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LearningChart } from "@/components/pages/learning-chart"
-import { CharacterMastery } from "@/components/pages/character-mastery"
-import BottomNavigation from "@/components/pages/BottomNavigation"
+'use client'
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { ArrowLeft, Clock, FlameIcon as Fire, Award, BookOpen } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import BottomNavigation from "@/components/pages/BottomNavigation";
+import { supabase } from "@/lib/supabase";
 
 export default function StatsPage() {
+  const [analytics, setAnalytics] = useState(null);
+  const [quizResults, setQuizResults] = useState([]);
+  const [characterStats, setCharacterStats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState(null);
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    if (userId) {
+      fetchAnalytics();
+      fetchQuizResults();
+      fetchCharacterStats();
+    }
+  }, [userId]);
+
+  const fetchUserData = async () => {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user?.email) {
+        console.error("User not logged in:", authError);
+        return;
+      }
+
+      const userEmail = authData.user.email;
+
+      const { data: userData, error: userError } = await supabase
+        .from("User")
+        .select("id")
+        .eq("email", userEmail)
+        .single();
+
+      if (userError || !userData) {
+        console.error("User not found in database:", userError);
+        return;
+      }
+
+      // Set userId as bigint
+      setUserId(userData.id);
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const { data: analyticsData, error: analyticsError } = await supabase
+        .from("Analytic")
+        .select("total_attempts, correct_attempts, wrong_attempts, accuracy")
+        .eq("user_id", userId);
+
+      if (analyticsError) {
+        console.error("Error fetching analytics:", analyticsError);
+        return;
+      }
+
+      setAnalytics(analyticsData);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+    }
+  };
+  const fetchQuizResults = async () => {
+    try {
+      const { data: quizData, error: quizError } = await supabase
+        .from("QuizSession")
+        .select("id, created_at, total_questions, QuizQuestion(is_correct)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+  
+      if (quizError) {
+        console.error("Error fetching quiz results:", quizError);
+        return;
+      }
+  
+      // Calculate the number of correct answers for each quiz
+      const resultsWithCorrectCount = quizData.map((quiz) => {
+        const correctCount = quiz.QuizQuestion.filter((q) => q.is_correct).length;
+        return {
+          ...quiz,
+          correctCount,
+        };
+      });
+  
+      setQuizResults(resultsWithCorrectCount);
+    } catch (error) {
+      console.error("Error fetching quiz results:", error);
+    }
+  };
+
+  const fetchCharacterStats = async () => {
+    try {
+      const { data: characterData, error: characterError } = await supabase
+        .from("Analytic")
+        .select("hanzi_id, total_attempts, correct_attempts, accuracy, HanziWord(character)")
+        .eq("user_id", userId);
+  
+      if (characterError) {
+        console.error("Error fetching character stats:", characterError);
+        return;
+      }
+  
+      setCharacterStats(characterData);
+    } catch (error) {
+      console.error("Error fetching character stats:", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  const totalAttempts = analytics?.reduce((sum, item) => sum + item.total_attempts, 0) || 0;
+  const correctAttempts = analytics?.reduce((sum, item) => sum + item.correct_attempts, 0) || 0;
+  const wrongAttempts = analytics?.reduce((sum, item) => sum + item.wrong_attempts, 0) || 0;
+const overallAccuracy = totalAttempts
+  ? ((correctAttempts / totalAttempts) * 100).toFixed(0)
+  : 0;
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
       <div className="p-4">
@@ -51,192 +175,83 @@ export default function StatsPage() {
               <Card className="border-purple-100">
                 <CardContent className="p-4 flex flex-col items-center">
                   <BookOpen className="h-8 w-8 text-purple-600 mb-2" />
-                  <p className="text-sm text-gray-500">Characters Learned</p>
-                  <p className="text-2xl font-bold text-purple-800">128</p>
+                  <p className="text-sm text-gray-500">Total Attempts</p>
+                  <p className="text-2xl font-bold text-purple-800">{totalAttempts}</p>
                 </CardContent>
               </Card>
 
               <Card className="border-purple-100">
                 <CardContent className="p-4 flex flex-col items-center">
                   <Fire className="h-8 w-8 text-purple-600 mb-2" />
-                  <p className="text-sm text-gray-500">Current Streak</p>
-                  <p className="text-2xl font-bold text-purple-800">7 days</p>
+                  <p className="text-sm text-gray-500">Correct Attempts</p>
+                  <p className="text-2xl font-bold text-purple-800">{correctAttempts}</p>
                 </CardContent>
               </Card>
 
               <Card className="border-purple-100">
                 <CardContent className="p-4 flex flex-col items-center">
                   <Award className="h-8 w-8 text-purple-600 mb-2" />
-                  <p className="text-sm text-gray-500">Quiz Accuracy</p>
-                  <p className="text-2xl font-bold text-purple-800">82%</p>
+                  <p className="text-sm text-gray-500">Wrong Attempts</p>
+                  <p className="text-2xl font-bold text-purple-800">{wrongAttempts}</p>
                 </CardContent>
               </Card>
 
               <Card className="border-purple-100">
                 <CardContent className="p-4 flex flex-col items-center">
                   <Clock className="h-8 w-8 text-purple-600 mb-2" />
-                  <p className="text-sm text-gray-500">Study Time</p>
-                  <p className="text-2xl font-bold text-purple-800">24h</p>
+                  <p className="text-sm text-gray-500">Overall Accuracy</p>
+                  <p className="text-2xl font-bold text-purple-800">{overallAccuracy}%</p>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Learning Progress */}
-            <Card className="border-purple-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Learning Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <LearningChart />
-
-                  <div className="pt-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">HSK 1</span>
-                      <span className="text-sm text-purple-600">45/50</span>
-                    </div>
-                    <Progress value={90} className="h-2 bg-purple-100" indicatorClassName="bg-purple-600" />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">HSK 2</span>
-                      <span className="text-sm text-purple-600">32/50</span>
-                    </div>
-                    <Progress value={64} className="h-2 bg-purple-100" indicatorClassName="bg-purple-600" />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">HSK 3</span>
-                      <span className="text-sm text-purple-600">15/50</span>
-                    </div>
-                    <Progress value={30} className="h-2 bg-purple-100" indicatorClassName="bg-purple-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="quizzes" className="space-y-6">
-            <Card className="border-purple-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Recent Quiz Results</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">HSK 1 Characters</p>
-                      <p className="text-sm text-gray-500">March 25, 2025</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-purple-800">18/20</p>
-                      <p className="text-sm text-purple-600">90%</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Mixed Characters</p>
-                      <p className="text-sm text-gray-500">March 23, 2025</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-purple-800">15/20</p>
-                      <p className="text-sm text-purple-600">75%</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">HSK 2 Characters</p>
-                      <p className="text-sm text-gray-500">March 20, 2025</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-purple-800">16/20</p>
-                      <p className="text-sm text-purple-600">80%</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-purple-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Challenging Characters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="flex flex-col items-center p-3 bg-red-50 rounded-lg border border-red-100">
-                    <span className="text-3xl mb-2">难</span>
-                    <span className="text-sm text-gray-600">Difficult</span>
-                    <span className="text-xs text-red-500 mt-1">40% accuracy</span>
-                  </div>
-
-                  <div className="flex flex-col items-center p-3 bg-red-50 rounded-lg border border-red-100">
-                    <span className="text-3xl mb-2">记</span>
-                    <span className="text-sm text-gray-600">Remember</span>
-                    <span className="text-xs text-red-500 mt-1">45% accuracy</span>
-                  </div>
-
-                  <div className="flex flex-col items-center p-3 bg-red-50 rounded-lg border border-red-100">
-                    <span className="text-3xl mb-2">解</span>
-                    <span className="text-sm text-gray-600">Understand</span>
-                    <span className="text-xs text-red-500 mt-1">50% accuracy</span>
-                  </div>
-
-                  <div className="flex flex-col items-center p-3 bg-red-50 rounded-lg border border-red-100">
-                    <span className="text-3xl mb-2">错</span>
-                    <span className="text-sm text-gray-600">Wrong</span>
-                    <span className="text-xs text-red-500 mt-1">55% accuracy</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+  <Card className="border-purple-100">
+    <CardHeader className="pb-2">
+      <CardTitle className="text-xl text-purple-800">Recent Quiz Results</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-4">
+        {quizResults.map((quiz) => (
+          <div
+            key={quiz.id}
+            className="flex justify-between items-center p-3 bg-purple-50 rounded-lg"
+          >
+            <div>
+              <p className="font-medium">Quiz on {new Date(quiz.created_at).toLocaleDateString()}</p>
+              <p className="text-sm text-gray-500">{quiz.total_questions} Questions</p>
+            </div>
+            <div className="text-right">
+              <p className="font-medium text-purple-800">
+                {quiz.correctCount}/{quiz.total_questions}
+              </p>
+              <p className="text-sm text-purple-600">
+                {((quiz.correctCount / quiz.total_questions) * 100).toFixed(0)}%
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
           <TabsContent value="characters" className="space-y-6">
             <Card className="border-purple-100">
               <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Character Mastery</CardTitle>
+                <CardTitle className="text-xl text-purple-800">Character Accuracy</CardTitle>
               </CardHeader>
               <CardContent>
-                <CharacterMastery />
-
-                <div className="grid grid-cols-3 gap-4 mt-6">
-                  <div className="flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-green-500 mb-2"></div>
-                    <span className="text-sm text-gray-600">Mastered</span>
-                    <span className="font-medium">68</span>
-                  </div>
-
-                  <div className="flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-yellow-500 mb-2"></div>
-                    <span className="text-sm text-gray-600">Learning</span>
-                    <span className="font-medium">42</span>
-                  </div>
-
-                  <div className="flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-red-500 mb-2"></div>
-                    <span className="text-sm text-gray-600">Needs Review</span>
-                    <span className="font-medium">18</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-purple-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Recently Mastered</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-5 gap-3">
-                  {["爱", "好", "学", "习", "中", "国", "人", "大", "小", "水"].map((char, index) => (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {characterStats.map((char) => (
                     <div
-                      key={index}
-                      className="flex flex-col items-center p-3 bg-green-50 rounded-lg border border-green-100"
+                      key={char.hanzi_id}
+                      className="flex flex-col items-center p-3 bg-purple-50 rounded-lg border border-purple-100"
                     >
-                      <span className="text-2xl">{char}</span>
+                    <span className="text-3xl mb-2">{char.HanziWord.character}</span>
+                      <span className="text-sm text-gray-600">{char.total_attempts} Attempts</span>
+                      <span className="text-xs text-purple-600 mt-1">{char.accuracy}% Accuracy</span>
                     </div>
                   ))}
                 </div>
@@ -246,9 +261,8 @@ export default function StatsPage() {
         </Tabs>
       </div>
 
-      {/* Bottom Navigation (reused from index page) */}
-      <BottomNavigation/>
+      {/* Bottom Navigation */}
+      <BottomNavigation />
     </div>
-  )
+  );
 }
-
