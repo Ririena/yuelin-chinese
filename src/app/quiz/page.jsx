@@ -28,7 +28,8 @@ export default function QuizPage() {
 
   const fetchUserData = async () => {
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
       if (authError || !authData?.user?.email) {
         console.error("User not logged in:", authError);
         return;
@@ -72,10 +73,16 @@ export default function QuizPage() {
   };
 
   const generateOptions = (correctAnswer, allMeanings) => {
+    const usedHanziIds = JSON.parse(localStorage.getItem("usedHanziIds")) || [];
+    const filteredMeanings = allMeanings.filter(
+      (word) => !usedHanziIds.includes(word.id)
+    );
+  
     let options = new Set([JSON.stringify(correctAnswer)]);
   
     while (options.size < 4) {
-      const randomOption = allMeanings[Math.floor(Math.random() * allMeanings.length)];
+      const randomOption =
+        filteredMeanings[Math.floor(Math.random() * filteredMeanings.length)];
       options.add(JSON.stringify(randomOption));
     }
   
@@ -87,6 +94,7 @@ export default function QuizPage() {
   const startQuiz = async () => {
     if (!userId || !characterCount || !hskLevel) return;
   
+    // Fetch all Hanzi words for the selected HSK level
     const { data: hanziWords, error } = await supabase
       .from("HanziWord")
       .select("id, character, meaning, pinyin") // Include pinyin
@@ -110,7 +118,10 @@ export default function QuizPage() {
   
     const questionsWithOptions = selectedHanziWords.map((word) => ({
       ...word,
-      options: generateOptions({ meaning: word.meaning, pinyin: word.pinyin }, allMeanings),
+      options: generateOptions(
+        { meaning: word.meaning, pinyin: word.pinyin },
+        allMeanings
+      ),
     }));
   
     const sessionId = uuidv4();
@@ -118,6 +129,10 @@ export default function QuizPage() {
     setQuestions(questionsWithOptions);
     setQuizStarted(true);
     setCurrentQuestionIndex(0);
+  
+    // Save the used Hanzi IDs in the session state
+    const usedHanziIds = selectedHanziWords.map((word) => word.id);
+    localStorage.setItem("usedHanziIds", JSON.stringify(usedHanziIds)); // Save to localStorage for session tracking
   
     await supabase.from("QuizSession").insert([
       {
@@ -131,20 +146,25 @@ export default function QuizPage() {
     ]);
   };
 
+  const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
+
   const handleSubmit = async () => {
     if (!selectedAnswer || !quizSessionId) return;
 
     const currentQuestion = questions[currentQuestionIndex];
     const isCorrect = selectedAnswer === currentQuestion.meaning;
 
-    // Show toast notification
     if (isCorrect) {
       toast.success("Correct! 🎉");
+      setShowCorrectAnswer(false);
+      moveToNextQuestion();
     } else {
-      toast.error("Incorrect! ❌");
+      toast.error(
+        `Incorrect! ❌ The correct answer is: ${currentQuestion.meaning}`
+      );
+      setShowCorrectAnswer(true);
     }
 
-    // Insert into QuizQuestion
     await supabase.from("QuizQuestion").insert([
       {
         id: uuidv4(),
@@ -156,27 +176,23 @@ export default function QuizPage() {
       },
     ]);
 
-    // Fetch existing analytic data
-    const { data: existingAnalytics, error: analyticError } = await supabase
+    // Update analytics
+    const { data: existingAnalytics } = await supabase
       .from("Analytic")
       .select("*")
       .eq("user_id", userId)
       .eq("hanzi_id", currentQuestion.id)
       .maybeSingle();
 
-    if (analyticError) {
-      console.error("Error fetching analytic data:", analyticError);
-      return;
-    }
-
     if (existingAnalytics) {
-      // Update existing analytic
       const updatedAnalytics = {
         total_attempts: existingAnalytics.total_attempts + 1,
-        correct_attempts: existingAnalytics.correct_attempts + (isCorrect ? 1 : 0),
+        correct_attempts:
+          existingAnalytics.correct_attempts + (isCorrect ? 1 : 0),
         wrong_attempts: existingAnalytics.wrong_attempts + (isCorrect ? 0 : 1),
-        accuracy: ((existingAnalytics.correct_attempts + (isCorrect ? 1 : 0)) /
-          (existingAnalytics.total_attempts + 1)) *
+        accuracy:
+          ((existingAnalytics.correct_attempts + (isCorrect ? 1 : 0)) /
+            (existingAnalytics.total_attempts + 1)) *
           100,
         last_attempted_at: new Date(),
       };
@@ -186,7 +202,6 @@ export default function QuizPage() {
         .update(updatedAnalytics)
         .eq("id", existingAnalytics.id);
     } else {
-      // Insert new analytic
       await supabase.from("Analytic").insert([
         {
           id: uuidv4(),
@@ -200,13 +215,21 @@ export default function QuizPage() {
         },
       ]);
     }
+  };
 
-    // Move to the next question or finish the quiz
+  const moveToNextQuestion = () => {
     if (currentQuestionIndex + 1 < questions.length) {
+      const currentQuestion = questions[currentQuestionIndex];
+      const usedHanziIds = JSON.parse(localStorage.getItem("usedHanziIds")) || [];
+      usedHanziIds.push(currentQuestion.id);
+      localStorage.setItem("usedHanziIds", JSON.stringify(usedHanziIds)); // Update localStorage
+  
       setCurrentQuestionIndex((prev) => prev + 1);
       setSelectedAnswer(null);
+      setShowCorrectAnswer(false);
     } else {
       setQuizStarted(false);
+      localStorage.removeItem("usedHanziIds"); // Clear used Hanzi IDs at the end of the session
     }
   };
 
@@ -214,18 +237,22 @@ export default function QuizPage() {
     <div className="min-h-screen bg-white flex flex-col">
       <Toaster position="top-right" reverseOrder={false} /> {/* Add Toaster */}
       <div className="p-4">
-        <Link href="/" className="inline-flex items-center text-purple-700 hover:text-purple-900">
+        <Link
+          href="/"
+          className="inline-flex items-center text-purple-700 hover:text-purple-900"
+        >
           <ArrowLeft size={20} className="mr-2" />
           <span>Back to Home</span>
         </Link>
       </div>
-
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-purple-800">Hanzi Quiz</h1>
             <p className="text-gray-600 mt-2">
-              {quizStarted ? "Select the correct meaning for each character" : "Test your knowledge of Chinese characters"}
+              {quizStarted
+                ? "Select the correct meaning for each character"
+                : "Test your knowledge of Chinese characters"}
             </p>
           </div>
 
@@ -240,7 +267,9 @@ export default function QuizPage() {
                     <input
                       type="number"
                       value={characterCount}
-                      onChange={(e) => setCharacterCount(Number(e.target.value))}
+                      onChange={(e) =>
+                        setCharacterCount(Number(e.target.value))
+                      }
                       max={maxCharacters}
                       min={1}
                       className="w-full border border-purple-200 rounded-md p-2"
@@ -297,30 +326,58 @@ export default function QuizPage() {
 
               <Card className="border-purple-100 shadow-sm">
                 <CardContent className="pt-6 pb-8">
-                  <div className="text-8xl mb-8">{questions[currentQuestionIndex]?.character}</div>
+                  <div className="text-8xl mb-8">
+                    {questions[currentQuestionIndex]?.character}
+                  </div>
                   <div className="grid grid-cols-1 gap-3 w-full">
-  {questions[currentQuestionIndex]?.options.map((option) => (
-    <Button
-      key={option.meaning}
-      variant="outline"
-      className={`justify-start text-left h-auto py-3 px-4 border-purple-200 hover:bg-purple-50 ${
-        selectedAnswer === option.meaning ? "border-purple-500 bg-purple-50" : ""
-      }`}
-      onClick={() => setSelectedAnswer(option.meaning)}
-    >
-      <div>
-        <p className="font-medium text-purple-800">{option.meaning}</p>
-        <p className="text-sm text-gray-500">{option.pinyin}</p>
-      </div>
-    </Button>
-  ))}
-</div>
+                    {questions[currentQuestionIndex]?.options.map((option) => (
+                      <Button
+                        key={option.meaning}
+                        variant="outline"
+                        className={`justify-start text-left h-auto py-3 px-4 border-purple-200 hover:bg-purple-50 ${
+                          selectedAnswer === option.meaning
+                            ? "border-purple-500 bg-purple-50"
+                            : ""
+                        }`}
+                        onClick={() => setSelectedAnswer(option.meaning)}
+                      >
+                        <div>
+                          <p className="font-medium text-purple-800">
+                            {option.meaning}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {option.pinyin}
+                          </p>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
-              <Button onClick={handleSubmit} className="w-full bg-purple-600 hover:bg-purple-700" disabled={!selectedAnswer}>
-                {currentQuestionIndex + 1 < questions.length ? "Next Question" : "Finish Quiz"}
-              </Button>
+              {showCorrectAnswer && (
+                <div className="mt-4 text-center">
+                  <p className="text-red-600 font-bold">
+                    Correct Answer: {questions[currentQuestionIndex]?.meaning}, Pinyin: {questions[currentQuestionIndex]?.pinyin}
+                  </p>
+                  <Button
+                    onClick={moveToNextQuestion}
+                    className="mt-2 w-full bg-purple-600 hover:bg-purple-700"
+                  >
+                    Next Question
+                  </Button>
+                </div>
+              )}
+
+              {!showCorrectAnswer && (
+                <Button
+                  onClick={handleSubmit}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  disabled={!selectedAnswer}
+                >
+                  Submit Answer
+                </Button>
+              )}
             </div>
           )}
         </div>
