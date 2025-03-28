@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/lib/supabase";
 import { v4 as uuidv4 } from "uuid";
+import toast, { Toaster } from "react-hot-toast"; // Import toast
 
 export default function QuizPage() {
   const [quizStarted, setQuizStarted] = useState(false);
@@ -71,14 +72,16 @@ export default function QuizPage() {
   };
 
   const generateOptions = (correctAnswer, allMeanings) => {
-    let options = new Set([correctAnswer]);
-
+    let options = new Set([JSON.stringify(correctAnswer)]);
+  
     while (options.size < 4) {
-      const randomMeaning = allMeanings[Math.floor(Math.random() * allMeanings.length)];
-      options.add(randomMeaning);
+      const randomOption = allMeanings[Math.floor(Math.random() * allMeanings.length)];
+      options.add(JSON.stringify(randomOption));
     }
-
-    return Array.from(options).sort(() => Math.random() - 0.5);
+  
+    return Array.from(options)
+      .map((option) => JSON.parse(option))
+      .sort(() => Math.random() - 0.5);
   };
 
   const startQuiz = async () => {
@@ -86,7 +89,7 @@ export default function QuizPage() {
   
     const { data: hanziWords, error } = await supabase
       .from("HanziWord")
-      .select("id, character, meaning")
+      .select("id, character, meaning, pinyin") // Include pinyin
       .eq("hsk_level", hskLevel); // Filter by selected HSK level
   
     if (error || !hanziWords || hanziWords.length === 0) {
@@ -100,11 +103,14 @@ export default function QuizPage() {
     // Limit the number of questions based on characterCount
     const selectedHanziWords = shuffledHanziWords.slice(0, characterCount);
   
-    const allMeanings = selectedHanziWords.map((word) => word.meaning);
+    const allMeanings = selectedHanziWords.map((word) => ({
+      meaning: word.meaning,
+      pinyin: word.pinyin,
+    }));
   
     const questionsWithOptions = selectedHanziWords.map((word) => ({
       ...word,
-      options: generateOptions(word.meaning, allMeanings),
+      options: generateOptions({ meaning: word.meaning, pinyin: word.pinyin }, allMeanings),
     }));
   
     const sessionId = uuidv4();
@@ -130,6 +136,13 @@ export default function QuizPage() {
 
     const currentQuestion = questions[currentQuestionIndex];
     const isCorrect = selectedAnswer === currentQuestion.meaning;
+
+    // Show toast notification
+    if (isCorrect) {
+      toast.success("Correct! 🎉");
+    } else {
+      toast.error("Incorrect! ❌");
+    }
 
     // Insert into QuizQuestion
     await supabase.from("QuizQuestion").insert([
@@ -199,6 +212,7 @@ export default function QuizPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
+      <Toaster position="top-right" reverseOrder={false} /> {/* Add Toaster */}
       <div className="p-4">
         <Link href="/" className="inline-flex items-center text-purple-700 hover:text-purple-900">
           <ArrowLeft size={20} className="mr-2" />
@@ -285,19 +299,22 @@ export default function QuizPage() {
                 <CardContent className="pt-6 pb-8">
                   <div className="text-8xl mb-8">{questions[currentQuestionIndex]?.character}</div>
                   <div className="grid grid-cols-1 gap-3 w-full">
-                    {questions[currentQuestionIndex]?.options.map((option) => (
-                      <Button
-                        key={option}
-                        variant="outline"
-                        className={`justify-start text-left h-auto py-3 px-4 border-purple-200 hover:bg-purple-50 ${
-                          selectedAnswer === option ? "border-purple-500 bg-purple-50" : ""
-                        }`}
-                        onClick={() => setSelectedAnswer(option)}
-                      >
-                        {option}
-                      </Button>
-                    ))}
-                  </div>
+  {questions[currentQuestionIndex]?.options.map((option) => (
+    <Button
+      key={option.meaning}
+      variant="outline"
+      className={`justify-start text-left h-auto py-3 px-4 border-purple-200 hover:bg-purple-50 ${
+        selectedAnswer === option.meaning ? "border-purple-500 bg-purple-50" : ""
+      }`}
+      onClick={() => setSelectedAnswer(option.meaning)}
+    >
+      <div>
+        <p className="font-medium text-purple-800">{option.meaning}</p>
+        <p className="text-sm text-gray-500">{option.pinyin}</p>
+      </div>
+    </Button>
+  ))}
+</div>
                 </CardContent>
               </Card>
 
