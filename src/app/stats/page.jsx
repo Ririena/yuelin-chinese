@@ -1,7 +1,13 @@
-'use client'
+"use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, FlameIcon as Fire, Award, BookOpen } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  FlameIcon as Fire,
+  Award,
+  BookOpen,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BottomNavigation from "@/components/pages/BottomNavigation";
@@ -28,7 +34,8 @@ export default function StatsPage() {
 
   const fetchUserData = async () => {
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
       if (authError || !authData?.user?.email) {
         console.error("User not logged in:", authError);
         return;
@@ -79,21 +86,23 @@ export default function StatsPage() {
         .select("id, created_at, total_questions, QuizQuestion(is_correct)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
-  
+
       if (quizError) {
         console.error("Error fetching quiz results:", quizError);
         return;
       }
-  
+
       // Calculate the number of correct answers for each quiz
       const resultsWithCorrectCount = quizData.map((quiz) => {
-        const correctCount = quiz.QuizQuestion.filter((q) => q.is_correct).length;
+        const correctCount = quiz.QuizQuestion.filter(
+          (q) => q.is_correct
+        ).length;
         return {
           ...quiz,
           correctCount,
         };
       });
-  
+
       setQuizResults(resultsWithCorrectCount);
     } catch (error) {
       console.error("Error fetching quiz results:", error);
@@ -104,15 +113,18 @@ export default function StatsPage() {
     try {
       const { data: characterData, error: characterError } = await supabase
         .from("Analytic")
-        .select("hanzi_id, total_attempts, correct_attempts, accuracy, HanziWord(character)")
+        .select(
+          "hanzi_id, total_attempts, correct_attempts, accuracy, HanziWord(id, character, pinyin, meaning)"
+        )
         .eq("user_id", userId);
-  
+
       if (characterError) {
         console.error("Error fetching character stats:", characterError);
         return;
       }
-  
+
       setCharacterStats(characterData);
+      console.log(characterData);
     } catch (error) {
       console.error("Error fetching character stats:", error);
     }
@@ -126,16 +138,22 @@ export default function StatsPage() {
     );
   }
 
-  const totalAttempts = analytics?.reduce((sum, item) => sum + item.total_attempts, 0) || 0;
-  const correctAttempts = analytics?.reduce((sum, item) => sum + item.correct_attempts, 0) || 0;
-  const wrongAttempts = analytics?.reduce((sum, item) => sum + item.wrong_attempts, 0) || 0;
-const overallAccuracy = totalAttempts
-  ? ((correctAttempts / totalAttempts) * 100).toFixed(0)
-  : 0;
+  const totalAttempts =
+    analytics?.reduce((sum, item) => sum + item.total_attempts, 0) || 0;
+  const correctAttempts =
+    analytics?.reduce((sum, item) => sum + item.correct_attempts, 0) || 0;
+  const wrongAttempts =
+    analytics?.reduce((sum, item) => sum + item.wrong_attempts, 0) || 0;
+  const overallAccuracy = totalAttempts
+    ? ((correctAttempts / totalAttempts) * 100).toFixed(0)
+    : 0;
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
       <div className="p-4">
-        <Link href="/" className="inline-flex items-center text-purple-700 hover:text-purple-900">
+        <Link
+          href="/"
+          className="inline-flex items-center text-purple-700 hover:text-purple-900"
+        >
           <ArrowLeft size={20} className="mr-2" />
           <span>Back to Home</span>
         </Link>
@@ -143,8 +161,12 @@ const overallAccuracy = totalAttempts
 
       <div className="flex-1 container mx-auto px-4 py-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-purple-800">Your Statistics</h1>
-          <p className="text-gray-600 mt-2">Track your Hanzi learning progress</p>
+          <h1 className="text-3xl font-bold text-purple-800">
+            Your Statistics
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Track your Hanzi learning progress
+          </p>
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
@@ -176,7 +198,9 @@ const overallAccuracy = totalAttempts
                 <CardContent className="p-4 flex flex-col items-center">
                   <BookOpen className="h-8 w-8 text-purple-600 mb-2" />
                   <p className="text-sm text-gray-500">Total Attempts</p>
-                  <p className="text-2xl font-bold text-purple-800">{totalAttempts}</p>
+                  <p className="text-2xl font-bold text-purple-800">
+                    {totalAttempts}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -184,7 +208,9 @@ const overallAccuracy = totalAttempts
                 <CardContent className="p-4 flex flex-col items-center">
                   <Fire className="h-8 w-8 text-purple-600 mb-2" />
                   <p className="text-sm text-gray-500">Correct Attempts</p>
-                  <p className="text-2xl font-bold text-purple-800">{correctAttempts}</p>
+                  <p className="text-2xl font-bold text-purple-800">
+                    {correctAttempts}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -192,7 +218,9 @@ const overallAccuracy = totalAttempts
                 <CardContent className="p-4 flex flex-col items-center">
                   <Award className="h-8 w-8 text-purple-600 mb-2" />
                   <p className="text-sm text-gray-500">Wrong Attempts</p>
-                  <p className="text-2xl font-bold text-purple-800">{wrongAttempts}</p>
+                  <p className="text-2xl font-bold text-purple-800">
+                    {wrongAttempts}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -200,47 +228,62 @@ const overallAccuracy = totalAttempts
                 <CardContent className="p-4 flex flex-col items-center">
                   <Clock className="h-8 w-8 text-purple-600 mb-2" />
                   <p className="text-sm text-gray-500">Overall Accuracy</p>
-                  <p className="text-2xl font-bold text-purple-800">{overallAccuracy}%</p>
+                  <p className="text-2xl font-bold text-purple-800">
+                    {overallAccuracy}%
+                  </p>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
           <TabsContent value="quizzes" className="space-y-6">
-  <Card className="border-purple-100">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-xl text-purple-800">Recent Quiz Results</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div className="space-y-4">
-        {quizResults.map((quiz) => (
-          <div
-            key={quiz.id}
-            className="flex justify-between items-center p-3 bg-purple-50 rounded-lg"
-          >
-            <div>
-              <p className="font-medium">Quiz on {new Date(quiz.created_at).toLocaleDateString()}</p>
-              <p className="text-sm text-gray-500">{quiz.total_questions} Questions</p>
-            </div>
-            <div className="text-right">
-              <p className="font-medium text-purple-800">
-                {quiz.correctCount}/{quiz.total_questions}
-              </p>
-              <p className="text-sm text-purple-600">
-                {((quiz.correctCount / quiz.total_questions) * 100).toFixed(0)}%
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-</TabsContent>
+            <Card className="border-purple-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl text-purple-800">
+                  Recent Quiz Results
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {quizResults.map((quiz) => (
+                    <div
+                      key={quiz.id}
+                      className="flex justify-between items-center p-3 bg-purple-50 rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium">
+                          Quiz on{" "}
+                          {new Date(quiz.created_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {quiz.total_questions} Questions
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-purple-800">
+                          {quiz.correctCount}/{quiz.total_questions}
+                        </p>
+                        <p className="text-sm text-purple-600">
+                          {(
+                            (quiz.correctCount / quiz.total_questions) *
+                            100
+                          ).toFixed(0)}
+                          %
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="characters" className="space-y-6">
             <Card className="border-purple-100">
               <CardHeader className="pb-2">
-                <CardTitle className="text-xl text-purple-800">Character Accuracy</CardTitle>
+                <CardTitle className="text-xl text-purple-800">
+                  Character Accuracy
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -249,9 +292,21 @@ const overallAccuracy = totalAttempts
                       key={char.hanzi_id}
                       className="flex flex-col items-center p-3 bg-purple-50 rounded-lg border border-purple-100"
                     >
-                    <span className="text-3xl mb-2">{char.HanziWord.character}</span>
-                      <span className="text-sm text-gray-600">{char.total_attempts} Attempts</span>
-                      <span className="text-xs text-purple-600 mt-1">{char.accuracy}% Accuracy</span>
+                      <span className="text-3xl mb-2">
+                        {char.HanziWord.character}
+                      </span>
+                      <span className="text-md text-purple-600">
+                        {char.HanziWord?.pinyin || "N/A"}{" "}
+                      </span>
+                      <div className="text-md text-gray-600">
+                        Artinya: <span className="text-purple-600"> {char.HanziWord?.meaning || "N/A"}{" "} </span>
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {char.total_attempts} Attempts
+                      </span>
+                      <span className="text-xs text-purple-600 mt-1">
+                        {char.accuracy}% Accuracy
+                      </span>
                     </div>
                   ))}
                 </div>
