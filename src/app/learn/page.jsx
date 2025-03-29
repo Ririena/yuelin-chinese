@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/pages/BottomNavigation";
 import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function LearnPage() {
@@ -20,6 +21,11 @@ export default function LearnPage() {
   const [hanziData, setHanziData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const router = useRouter();
+
+  const handleAddNavigation = () => {
+    router.push("/learn/add");
+  }
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -77,6 +83,7 @@ export default function LearnPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-purple-800">Learn Hanzi</h1>
           <p className="text-gray-600 mt-2">Master Chinese characters step by step</p>
+          <button onClick={handleAddNavigation} className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">Add New Hanzi</button>
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
